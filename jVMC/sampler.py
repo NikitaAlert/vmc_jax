@@ -38,6 +38,18 @@ def propose_spin_flip_Z2(key, s, info):
     doFlip = random.randint(flipKey, (1,), 0, 5)[0]
     return jax.lax.cond(doFlip == 0, lambda x: 1 - x, lambda x: x, s)
 
+def propose_spin_flip_Z3(key, s, info):
+    idxKey, flipKey = jax.random.split(key)
+    idx = random.randint(idxKey, (1,), 0, s.size)[0]
+    idx = jnp.unravel_index(idx, s.shape)
+    update = (s[idx] + 1) % 2
+    s = s.at[idx].set(update)
+    # On average, do a global spin flip every 30 updates to
+    # reflect Z_2 symmetry
+    # doFlip = random.randint(flipKey, (1,), 0, 5)[0]
+    doFlip = (random.uniform(flipKey) < 1/info).astype(jnp.int32)
+    return jax.lax.cond(doFlip==1, lambda x: 1 - x, lambda x: x, s)
+
 
 def propose_spin_flip_zeroMag(key, s, info):
     # propose spin flips that stay in the zero magnetization sector
