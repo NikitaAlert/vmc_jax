@@ -37,8 +37,8 @@ class RNN(nn.Module):
         # the helper method allows to use nn.jit with static_argnames
         return self.forward_with_state(s, carry_state, output_state)
 
-    @partial(nn.jit, static_argnums=3)
-    def forward_with_state(self, s: Array, carry_state: Array = None,  output_state: bool = False) -> Array:
+    # @partial(nn.jit, static_argnames=['carry_state', 'output_state'])
+    def forward_with_state(self, s: Array, carry_state: Array = None,  output_state = False):# -> Array:
 
         # embed the input and apply the input layer norm
         if output_state:
