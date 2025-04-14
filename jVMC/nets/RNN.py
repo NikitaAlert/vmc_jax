@@ -63,9 +63,10 @@ class RNN(nn.Module):
 
         #####################################
         x = nn.log_softmax(x) * self.logProbFactor
+        
         # the log-probs according the state
         return (jnp.take_along_axis(x, jnp.expand_dims(
-                                s, # here we shift the state by one to match the indexing
+                                s.astype(jnp.int64), # here we shift the state by one to match the indexing
                                 axis=-1), axis=-1)
                                 .sum(axis=-2)
                                 .squeeze(-1) 
