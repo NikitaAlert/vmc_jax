@@ -116,6 +116,8 @@ class CpxRBMCNN(nn.Module):
     bias: bool = False
     firstLayerBias: bool = False
     periodicBoundary: bool = True
+    Lx : int = None
+    Ly : int = None
 
     @nn.compact
     def __call__(self, x):
@@ -127,6 +129,9 @@ class CpxRBMCNN(nn.Module):
         # Set up padding for periodic boundary conditions
         # Padding size must be 1 - filter diameter
         pads = [(0, 0)]
+        
+        if not self.Lx==None:
+            x = jnp.reshape(x, (self.Lx,self.Ly))
         for f in self.F:
             if self.periodicBoundary:
                 pads.append((0, f - 1))
