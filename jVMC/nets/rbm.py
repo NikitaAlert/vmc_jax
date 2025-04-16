@@ -154,7 +154,7 @@ class CpxRBMCNN(nn.Module):
                x = jnp.pad(x, pads, 'constant', constant_values=0)
             x = f(nn.Conv(features=c, kernel_size=tuple(self.F),
                           strides=self.strides,
-                          use_bias=bias, **init_args)(x))
+                          use_bias=b, **init_args)(x))
 
         # strides=self.strides, padding=[(0, 0)] * len(self.strides),
         # nrm = jnp.sqrt(jnp.prod(jnp.array(x.shape[reduceDims[-1]:])))
