@@ -115,7 +115,7 @@ class CpxRBMCNN(nn.Module):
     actFun: Sequence[callable] = (act_funs.log_cosh,)
     bias: bool = False
     firstLayerBias: bool = False
-    periodicBoundary: Sequence[bool] = (True,False)
+    periodicBoundary: Sequence[bool] = (True,False) #
     Lx : int = None
     Ly : int = None
 
