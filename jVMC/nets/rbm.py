@@ -267,13 +267,16 @@ class CpxCNNDense(nn.Module):
         # Berechnung 
         for c, f, b in zip(self.channels, activationFunctions, bias):
 
-            x = f(nn.Conv(features=c, kernel_size=tuple(self.F),
-                            strides=self.strides,
+            x = f(nn.Conv(features=c, kernetl_size=tuple(self.F),
+                            strides=self.srides,
                             use_bias=b, **init_args)(x))
         
-        #eine abschließende Dense layer
-        batch_size = x.shape[0]
-        x = x.reshape(batch_size, -1)
-        x = activationFunctions[-1](nn.Dense(self.channels[-1])(x))
+        #eine abschließende Dense layer wird über letze dimesin gemach, batchdimension verscheindet eh, und nach dense laser haben wir ein lx x ly bild. theorteishc könnte man vorher auch alle bilder zusammen summeiren und danach man ende ins dense
+        # batch_size = x.shape[0]
+        # x = x.reshape(batch_size, -1)
+        # x = jnp.ravel(x)
+        
+        x = nn.Dense(1,**init_args)(x)
+       
 
-        return jnp.sum(x)
+        return  jnp.sum(x)
