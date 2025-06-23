@@ -209,6 +209,8 @@ class CpxCNNDense(nn.Module):
     Lx : int = None
     Ly : int = None
 
+    Dense_with : int = 1
+
     @nn.compact
     def __call__(self, x): # input has dim (L**2,) or (L,) defdending non init in Filter its 2d or 1d
 
@@ -267,16 +269,128 @@ class CpxCNNDense(nn.Module):
         # Berechnung 
         for c, f, b in zip(self.channels, activationFunctions, bias):
 
-            x = f(nn.Conv(features=c, kernetl_size=tuple(self.F),
-                            strides=self.srides,
-                            use_bias=b, **init_args)(x))
+            x = f(nn.Conv(features=c, kernel_size=tuple(self.F),
+                            strides=self.strides,
+                            use_bias=b, **init_args)(x)) #shape ist [1,L,L,ch] danach
         
         #eine abschließende Dense layer wird über letze dimesin gemach, batchdimension verscheindet eh, und nach dense laser haben wir ein lx x ly bild. theorteishc könnte man vorher auch alle bilder zusammen summeiren und danach man ende ins dense
         # batch_size = x.shape[0]
         # x = x.reshape(batch_size, -1)
         # x = jnp.ravel(x)
-        
-        x = nn.Dense(1,**init_args)(x)
-       
 
-        return  jnp.sum(x)
+  
+        # vorher die bilder summieren
+        x = jnp.sum(x, axis=( 1, 2))
+        
+        x = nn.Dense(self.Dense_with,**init_args)(x)
+
+
+        return  jnp.sum(x) # just to get the right shaoe and remove batch dim
+
+
+
+# keine aktivierungsfunktion bei conv, aber am ende bei dnse
+class CpxCNNDTest(nn.Module):
+    """Convolutional neural network with complex parameters.
+
+    Initialization arguments:
+        * ``F``: Filter diameter
+        * ``channels``: Number of channels
+        * ``strides``: Number of pixels the filter shifts over
+        * ``actFun``: Non-linear activation function
+        * ``bias``: Whether to use biases
+        * ``firstLayerBias``: Whether to use biases in the first layer
+        * ``periodicBoundary``: Whether to use periodic boundary conditions
+
+    """
+    F: Sequence[int] = (8,)
+    channels: Sequence[int] = (10,)
+    strides: Sequence[int] = (1,)
+    actFun: Sequence[callable] = (act_funs.log_cosh,)
+    bias: bool = False
+    firstLayerBias: bool = False
+    periodicBoundary: Sequence[bool] = (True,False) # Zylinder
+    Lx : int = None
+    Ly : int = None
+
+    Dense_with : int = 1
+
+    @nn.compact
+    def __call__(self, x): # input has dim (L**2,) or (L,) defdending non init in Filter its 2d or 1d
+
+        # initFunction = jax.nn.initializers.variance_scaling(scale=1.0, mode="fan_avg", distribution="uniform", dtype=global_defs.tReal)
+        # initFunction = jVMC.nets.initializers.cplx_variance_scaling
+        initFunction = jVMC.nets.initializers.cplx_init
+
+        bias = [self.bias] * len(self.channels)
+
+        activationFunctions = [f for f in self.actFun]
+        for l in range(len(activationFunctions), len(self.channels)):
+            activationFunctions.append(self.actFun[-1])
+
+        init_args = init_fn_args(dtype=global_defs.tCpx, kernel_init=initFunction)
+
+        # List of axes that will be summed for symmetrization
+        reduceDims = tuple([-i - 1 for i in range(len(self.strides) + 2)])
+
+        # für 2D fall
+        if not self.Lx==None:
+            x = jnp.reshape(x, (self.Lx,self.Ly))
+
+        # # Add feature dimension
+        x = jnp.expand_dims(jnp.expand_dims(2 * x - 1, axis=0), axis=-1)
+
+
+        # Set up padding for periodic boundary conditions
+        # Padding size must be 1 - filter diameter
+        # 1D
+        if self.Lx==None:
+            if self.periodicBoundary[0]:
+                x = jnp.pad(x, [(0, 0), (0, self.F[0] - 1), (0, 0)], 'wrap')
+                # print(x[0,:,:,0])
+            else:
+                x = jnp.pad(x, [(0, 0), (self.F[0] - 1, self.F[0] - 1), (0, 0)], 'constant', constant_values=0)
+                # print(x[0,:,:,0])
+        #2D
+        if not self.Lx==None:
+
+
+            # Padding in x-Richtung (Achse 2 !! nicht achse 1) # Also, wenn du Periodizität in X (horizontal) möchtest, dann bedeutet das: Die zweite Achse (Spalten) sollte periodisch behandelt werden
+            if self.periodicBoundary[0]:
+                x = jnp.pad(x, [(0, 0), (0, 0), (0, self.F[0] - 1), (0, 0)], mode="wrap")
+            else:
+                x = jnp.pad(x, [(0, 0), (0, 0), ((self.F[0] - 1, self.F[0] - 1 )), (0, 0)], mode="constant", constant_values=0) # bei nicht periodischen muss links und rechtes beiden seiten mit 0llen einfach
+                # asymmetrisch korrekt
+
+            # Padding in y-Richtung (Achse 1, F[1]!)  
+            if self.periodicBoundary[1]:
+                x = jnp.pad(x, [(0, 0), (0, self.F[1] - 1), (0, 0), (0, 0)], mode="wrap")
+            else:
+                x = jnp.pad(x, [(0, 0), (self.F[1] - 1, self.F[1] - 1 ), (0, 0), (0, 0)], mode="constant", constant_values=0)  
+
+
+
+        # Berechnung 
+        for c, f, b in zip(self.channels, activationFunctions, bias):
+
+            x = act_funs.log_cosh(nn.Conv(features=c, kernel_size=tuple(self.F),
+                            strides=self.strides,
+                            use_bias=b, **init_args)(x)) #shape ist [1,L,L,ch] danach
+        
+        #eine abschließende Dense layer wird über letze dimesin gemach, batchdimension verscheindet eh, und nach dense laser haben wir ein lx x ly bild. 
+        # theorteishc könnte man vorher auch alle bilder zusammen summeiren und danach man ende ins dense
+        # batch_size = x.shape[0]
+        # x = x.reshape(batch_size, -1) #[1,L*H*CH]
+        # x = jnp.ravel(x)
+
+
+        # vorher die bilder summieren
+        # x = jnp.sum(x, axis=( 1, 2))
+        
+        x = nn.Dense(self.Dense_with,**init_args)(x)
+
+
+        return  jnp.sum(x) # just to get the right shaoe and remove batch dim
+    
+    # jnp.tanh
+    # act_funs.log_cosh

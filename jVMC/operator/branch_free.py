@@ -424,15 +424,9 @@ class BranchFreeOperator(Operator):
                 nEls = (N + commSize - 1) // commSize
                 myStart = nEls * rank
                 myEnd = min(myStart+nEls, N)
-
-                firstIdx = [0] + [prefactor[nEls * r][0]-1 for r in range(1,commSize)]
-                lastIdx = [prefactor[min(nEls * (r+1), N-1)][0]-1 for r in range(commSize-1)] + [len(init)]
-
-                res = init[firstIdx[rank]:lastIdx[rank]]
-
+                res = init[myStart:myEnd]
                 for i,f in prefactor[myStart:myEnd]:
-                    res[i-firstIdx[rank]] = f(*args)
-
+                    res[i-myStart] = f(*args)
                 res = np.concatenate(comm.allgather(res), axis=0)
                 
             return (jnp.array(res), )
@@ -451,7 +445,7 @@ class BranchFreeOperator(Operator):
         ######## fermions ########
         dim = s.ravel().shape[0]
         mask = jnp.tril(jnp.ones((dim,dim),dtype=int),-1).T
-        ##########################
+        ########################## 
 
         def apply_fun(c, x):
             config, configMatEl = c
