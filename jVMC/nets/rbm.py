@@ -215,8 +215,9 @@ class CpxCNNDense(nn.Module):
     def __call__(self, x): # input has dim (L**2,) or (L,) defdending non init in Filter its 2d or 1d
 
         # initFunction = jax.nn.initializers.variance_scaling(scale=1.0, mode="fan_avg", distribution="uniform", dtype=global_defs.tReal)
-        # initFunction = jVMC.nets.initializers.cplx_variance_scaling
-        initFunction = jVMC.nets.initializers.cplx_init
+        initFunction = jVMC.nets.initializers.cplx_variance_scaling
+        initFunction_dense = jVMC.nets.initializers.cplx_variance_scaling_dense
+        # initFunction = jVMC.nets.initializers.cplx_init
 
         bias = [self.bias] * len(self.channels)
 
@@ -225,6 +226,7 @@ class CpxCNNDense(nn.Module):
             activationFunctions.append(self.actFun[-1])
 
         init_args = init_fn_args(dtype=global_defs.tCpx, kernel_init=initFunction)
+        init_args_dense = init_fn_args(dtype=global_defs.tCpx, kernel_init=initFunction_dense)
 
         # List of axes that will be summed for symmetrization
         reduceDims = tuple([-i - 1 for i in range(len(self.strides) + 2)])
@@ -282,7 +284,7 @@ class CpxCNNDense(nn.Module):
         # vorher die bilder summieren
         x = jnp.sum(x, axis=( 1, 2))
         
-        x = nn.Dense(self.Dense_with,**init_args)(x)
+        x = nn.Dense(self.Dense_with,**init_args_dense)(x)
 
 
         return  jnp.sum(x) # just to get the right shaoe and remove batch dim
