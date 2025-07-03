@@ -30,11 +30,16 @@ def cplx_variance_scaling(rng, shape, dtype):
     w = jax.numpy.sqrt((shape[-1] + shape[-2]) * elems)
     return (1. / w) * unif(rng1, shape, dtype=global_defs.tReal) * jax.numpy.exp(1.j * 3.141593 * unif(rng2, shape, dtype=global_defs.tReal))
 
-def cplx_variance_scaling_dense(rng, shape, dtype):
+def cplx_variance_scaling_dense(rng, shape, dtype, dense_width=1):
     rng1, rng2 = jax.random.split(rng)
     unif = jax.nn.initializers.uniform(scale=1.)
     elems = 1
     for k in shape[:-2]:
         elems *= k
     w = jax.numpy.sqrt((shape[-1] + shape[-2]) * elems)
-    return jnp.ones(shape)+(1. / w) * unif(rng1, shape, dtype=global_defs.tReal) * jax.numpy.exp(1.j * 3.141593 * unif(rng2, shape, dtype=global_defs.tReal))
+    return jnp.ones(shape)*1/dense_width+(1. / w) * unif(rng1, shape, dtype=global_defs.tReal) * jax.numpy.exp(1.j * 3.141593 * unif(rng2, shape, dtype=global_defs.tReal))
+
+# def cplx_dense_ones(rng, shape, dtype):
+#     rng1, rng2 = jax.random.split(rng)
+#     unif = jax.nn.initializers.uniform()
+#     return jnp.ones(shape)+unif(rng1, shape, dtype=global_defs.tReal) + 1.j * unif(rng2, shape, dtype=global_defs.tReal)

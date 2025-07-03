@@ -215,9 +215,16 @@ class CpxCNNDense(nn.Module):
     def __call__(self, x): # input has dim (L**2,) or (L,) defdending non init in Filter its 2d or 1d
 
         # initFunction = jax.nn.initializers.variance_scaling(scale=1.0, mode="fan_avg", distribution="uniform", dtype=global_defs.tReal)
+
         initFunction = jVMC.nets.initializers.cplx_variance_scaling
-        initFunction_dense = jVMC.nets.initializers.cplx_variance_scaling_dense
+
+        initFunction_dense = partial(jVMC.nets.initializers.cplx_variance_scaling_dense, dense_width=self.Dense_with)
+
+        # initFunction_dense=jVMC.nets.initializers.cplx_dense_ones
+
         # initFunction = jVMC.nets.initializers.cplx_init
+
+        # initFunction_dense = initFunction 
 
         bias = [self.bias] * len(self.channels)
 
@@ -279,13 +286,22 @@ class CpxCNNDense(nn.Module):
         # batch_size = x.shape[0]
         # x = x.reshape(batch_size, -1)
         # x = jnp.ravel(x)
-
-  
-        # vorher die bilder summieren
-        x = jnp.sum(x, axis=( 1, 2))
         
-        x = nn.Dense(self.Dense_with,**init_args_dense)(x)
 
+        # jax.debug.print("CNN_sumx={x}",x=jnp.sum(x))
+        # # vorher die bilder summieren
+        # x = jnp.sum(x, axis=( 1, 2))
+
+
+        # vorher die channels summieren (udn batch)
+        x = jnp.sum(x, axis=(0,3))
+        x = jnp.ravel(x)
+
+
+    
+        x = nn.Dense(self.Dense_with,**init_args_dense)(x) # w*X + w_2*X ,X hier dei bilder [1,L,L]
+
+        
 
         return  jnp.sum(x) # just to get the right shaoe and remove batch dim
 

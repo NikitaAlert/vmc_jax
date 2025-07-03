@@ -2,6 +2,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+import matplotlib
+
 import jVMC
 import jVMC.mpi_wrapper as mpi
 import jVMC.global_defs as global_defs
@@ -180,6 +182,7 @@ class TDVP:
 
         self.snr = jnp.sqrt(jnp.abs(mpi.globNumSamples * (jnp.conj(self.VtF) * self.VtF) / self.rhoVar)).ravel()
 
+
     def solve(self, Eloc, gradients):
         # Get TDVP equation from MC data
         self.S, F = self.get_tdvp_equation(Eloc, gradients)
@@ -203,6 +206,10 @@ class TDVP:
             if not isinstance(self.sampler, jVMC.sampler.ExactSampler):
                 # Construct a soft cutoff based on the SNR
                 regularizer *= 1. / (1. + (self.snrTol / self.snr)**6)
+                regularizer_sum =jnp.sum(regularizer)
+                regularizer = jnp.where(jnp.isnan(regularizer), 0.,regularizer )
+                if regularizer_sum == jnp.sum(regularizer):
+                    print("SNR regularizer_sum hat nan's")
 
             pinvEv = self.invEv * regularizer
 
