@@ -198,6 +198,8 @@ class TDVP:
         residual = 1.0
         cutoff = 1e-2
         F_norm = jnp.linalg.norm(F)
+
+        nan_flag =False
         while residual > self.pinvTol and cutoff > self.pinvCutoff:
             cutoff *= 0.8
             # Set regularizer for singular value cutoff
@@ -209,13 +211,17 @@ class TDVP:
                 regularizer_sum =jnp.sum(regularizer)
                 regularizer = jnp.where(jnp.isnan(regularizer), 0.,regularizer )
                 if regularizer_sum == jnp.sum(regularizer):
-                    print("SNR regularizer_sum hat nan's")
+                    nan_flag = True
 
             pinvEv = self.invEv * regularizer
 
             residual = jnp.linalg.norm((pinvEv * self.ev - jnp.ones_like(pinvEv)) * self.VtF) / F_norm
 
         update = jnp.real(jnp.dot(self.V, (pinvEv * self.VtF)))
+
+        if nan_flag:
+            print("SNR regularizer_sum hat nan's (somewhere in regularization While loop)")
+            nan_flag =False
 
         return update, residual, max(cutoff, self.pinvCutoff)
 
