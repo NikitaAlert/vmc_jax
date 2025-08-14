@@ -236,7 +236,7 @@ class CpxCNNDense(nn.Module):
         init_args_dense = init_fn_args(dtype=global_defs.tCpx, kernel_init=initFunction_dense)
 
         # List of axes that will be summed for symmetrization
-        reduceDims = tuple([-i - 1 for i in range(len(self.strides) + 2)])
+        # reduceDims = tuple([-i - 1 for i in range(len(self.strides) + 2)])
 
         # für 2D fall
         if not self.Lx==None:
@@ -304,6 +304,117 @@ class CpxCNNDense(nn.Module):
         
 
         return  jnp.sum(x) # just to get the right shaoe and remove batch dim
+    
+######################################
+
+class ResNetV2(nn.Module):
+    """Convolutional neural network with complex parameters.
+
+    Initialization arguments:
+        * ``F``: Filter diameter
+        * ``channels``: Number of channels
+        * ``strides``: Number of pixels the filter shifts over
+        * ``actFun``: Non-linear activation function
+        * ``bias``: Whether to use biases
+        * ``firstLayerBias``: Whether to use biases in the first layer
+        * ``periodicBoundary``: Whether to use periodic boundary conditions
+
+    """
+    F: Sequence[int] = (3,3)
+    channels: Sequence[int] = (10,10)
+    strides: Sequence[int] = (1,1)
+    actFun: Sequence[callable] = (act_funs.poly6,)
+    bias: bool = False
+    firstLayerBias: bool = False
+    Lx : int = None
+    Ly : int = None
+
+    Dense_with : int = 1 
+    
+    nblocks : int = 1
+
+    @nn.compact
+    def __call__(self, x): # input has dim (L**2,) or (L,) defdending non init in Filter its 2d or 1d
+
+        def pad_periodic_x_zero_y(x, kernel_size):
+            
+            # Warnung oder Anpassung bei gerader Kernelgröße
+            if kernel_size % 2 == 0:
+                raise ValueError(f"Warnung: Kernelgröße {kernel_size} ist gerade. Symmetrisches Padding führt zu vergrößertem Output. Residuals passen nicht mehr")
+               
+
+            pad = (kernel_size - 1)
+
+            # In offener Richtung (y-Achse) unsymmetrisch paddden
+            pad_y = int(pad / 2)
+            # print(np.dtype(pad_y))
+            x = jnp.pad(x, ((0, 0), (pad_y, pad_y), (0, 0), (0, 0)), mode='constant', constant_values=0)  # y-Achse
+
+            # In periodischer Richtung (x-Achse) einfach rechts paddden
+            x = jnp.pad(x, ((0, 0), (0, 0), (0, pad), (0, 0)), mode='wrap')  # x-Achse
+            return x
+
+
+        # initFunction = jax.nn.initializers.variance_scaling(scale=1.0, mode="fan_avg", distribution="uniform", dtype=global_defs.tReal)
+        # initFunction = jVMC.nets.initializers.cplx_variance_scaling
+
+        initFunction_dense = partial(jVMC.nets.initializers.cplx_variance_scaling_dense, dense_width=self.Dense_with)
+        initFunction = jVMC.nets.initializers.cplx_init2
+
+        init_args = init_fn_args(dtype=global_defs.tCpx, kernel_init=initFunction)
+        init_args_dense = init_fn_args(dtype=global_defs.tCpx, kernel_init=initFunction_dense)
+
+
+        # für jeden block die architectur  #########
+
+        bias = [self.bias] * len(self.channels)
+
+        activationFunctions = [f for f in self.actFun]
+        for l in range(len(activationFunctions), len(self.channels)):
+            activationFunctions.append(self.actFun[-1])
+
+        # für 2D fall
+        x = jnp.reshape(x, (self.Lx,self.Ly))
+
+        # # Add feature dimension
+        x = jnp.expand_dims(jnp.expand_dims(2 * x - 1, axis=0), axis=-1)
+
+        # Berechnung 
+        for nblock in range(self.nblocks):
+
+            residual = x
+
+            # Berechnung in jedem block
+            for c, f, b in zip(self.channels, activationFunctions, bias):
+                
+                # aktiverungsfunktion für den block davor noch, beim letzten dann keine, erst nach dense layer wieder
+                if nblock > 0:
+                    x = f(x)
+
+                x = pad_periodic_x_zero_y(x, kernel_size=self.F[nblock])
+
+                x = nn.Conv(features=c, kernel_size=(self.F[nblock], self.F[nblock]),
+                                strides=self.strides,
+                                use_bias=b, padding="VALID", **init_args)(x) #shape ist [1,L,L,ch] danach
+            
+            x += residual
+
+        # vorher die channels summieren (udn batch)
+        x = jnp.sum(x, axis=(0,3))
+        x = jnp.ravel(x)
+    
+        x = nn.Dense(self.Dense_with,**init_args_dense)(x) # w*X + w_2*X ,X hier dei bilder [1,L,L]
+
+        # eine letzte activerungsfunktion
+        x = activationFunctions[-1](x)
+
+        
+
+        return  jnp.sum(x) # just to get the right shaoe and remove batch dim
+
+
+
+#######################################
 
 
 
@@ -339,7 +450,18 @@ class ResNet(nn.Module):
             # In periodischer Richtung (x-Achse) einfach rechts paddden
             x = jnp.pad(x, ((0, 0), (0, 0), (0, pad), (0, 0)), mode='wrap')  # x-Achse
             return x
+        
+     
 
+        # gewicht initialisierung dür die layers
+        # CNN
+        initFunction = jax.nn.initializers.he_normal(dtype=global_defs.tReal)
+        # initFunction = jVMC.nets.initializers.real_init2
+
+        #dense
+        initFunction_dense = jax.nn.initializers.normal(stddev=1.0, dtype=global_defs.tReal)
+        # initFunction_dense = partial(jVMC.nets.initializers.cplx_variance_scaling_dense, dense_width=self.Dense_with)
+        
         nsites = x.size
 
         if x.ndim == 1:
@@ -396,10 +518,10 @@ class ResNet(nn.Module):
                 use_bias=self.bias,
                 param_dtype=global_defs.tReal,
                 dtype=global_defs.tReal,
-                kernel_init=jax.nn.initializers.he_normal(dtype=global_defs.tReal),
+                kernel_init=initFunction,
                 bias_init=jax.nn.initializers.zeros,
             )(x_both)
-            # print("x-shape nach 1 conv",x.shape)
+           
             x_both = nn.gelu(x_both) 
             # x = act_funs.poly6(x)
 
@@ -414,10 +536,9 @@ class ResNet(nn.Module):
                 use_bias=self.bias and (nblock != len(self.channels) - 1),
                 param_dtype=global_defs.tReal,
                 dtype=global_defs.tReal,
-                kernel_init=jax.nn.initializers.he_normal(dtype=global_defs.tReal),
+                kernel_init=initFunction,
                 bias_init=jax.nn.initializers.zeros,
             )(x_both)
-
 
             # Split wieder in original und spinflipped
             x, x_sym = jnp.split(x_both, 2, axis=0)
@@ -447,8 +568,9 @@ class ResNet(nn.Module):
             use_bias=False,
             param_dtype=global_defs.tReal,
             dtype=global_defs.tReal,
-            kernel_init=jax.nn.initializers.normal(stddev=1.0, dtype=global_defs.tReal),
+            kernel_init = initFunction_dense,
         )(x_stacked)
+
 
         x_real_out = x_stacked[0]
         x_imag_out = x_stacked[1]

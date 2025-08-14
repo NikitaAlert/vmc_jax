@@ -133,6 +133,7 @@ def global_sum(data):
 
     # Compute sum locally
     localSum = np.array(_sum_up_pmapd(data)[0])
+    # print(f"ran {rank} berechnet localSum: {localSum} und hat data_shape {data.shape}")
 
     # Allocate memory for result
     res = np.empty_like(localSum, dtype=localSum.dtype)
